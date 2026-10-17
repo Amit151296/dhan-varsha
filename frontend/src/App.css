@@ -113,3 +113,111 @@
 .dashboard-page main {
   padding: 2rem;
 }
+
+.analyser-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.analyser-controls select,
+.analyser-controls button {
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f1f5f9;
+  font-size: 0.95rem;
+}
+
+.analyser-controls button {
+  background: #38bdf8;
+  color: #0f172a;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+
+.analyser-controls button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.analyser-history {
+  margin-bottom: 1.5rem;
+}
+
+.analyser-history h3 {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.analyser-history ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #38bdf8;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+.analyser-empty {
+  color: #94a3b8;
+}
+
+.metrics-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+}
+
+.metrics-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.metrics-table th,
+.metrics-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #1e293b;
+  text-align: right;
+}
+
+.metrics-table th:first-child,
+.metrics-table td:first-child {
+  text-align: left;
+}
+
+.metrics-table thead th {
+  background: #1e293b;
+  color: #f1f5f9;
+  position: sticky;
+  top: 0;
+}
+
+.metrics-table-sticky-col {
+  position: sticky;
+  left: 0;
+  background: #0f172a;
+}
+
+.metrics-table thead .metrics-table-sticky-col {
+  background: #1e293b;
+  z-index: 1;
+}
