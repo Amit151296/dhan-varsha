@@ -36,7 +36,7 @@ class Zone:
 def _resolve(zone: Zone | None) -> dict | None:
     if zone is None:
         return None
-    return {"background": ZONE_HEX[zone.name], "color": TONE_TEXT[zone.tone]}
+    return {"zone": zone.name, "background": ZONE_HEX[zone.name], "color": TONE_TEXT[zone.tone]}
 
 
 def _avg_sales_zone(x: float) -> Zone | None:
@@ -174,6 +174,8 @@ def _qoq_zone(x: float) -> Zone | None:
         return Zone("red", "dark")
     if x < 0:
         return Zone("red")
+    if x == 0:
+        return None  # flat QoQ is neutral, same as the sign-based metrics above
     if x <= 10:
         return Zone("orange")
     if x < 20:

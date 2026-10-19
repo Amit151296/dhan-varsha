@@ -37,9 +37,11 @@ class SectorOut(BaseModel):
 
 class FetchRequest(BaseModel):
     sector_key: str
+    force_refresh: bool = False
 
 
 class Highlight(BaseModel):
+    zone: str
     background: str
     color: str
 
@@ -59,6 +61,7 @@ class FetchJobSummaryOut(BaseModel):
     row_count: int
     requested_at: datetime
     completed_at: datetime | None = None
+    from_cache: bool = False
 
     class Config:
         from_attributes = True
@@ -66,3 +69,28 @@ class FetchJobSummaryOut(BaseModel):
 
 class FetchJobDetailOut(FetchJobSummaryOut):
     rows: list[StockRowOut]
+
+
+class CompanySearchResult(BaseModel):
+    name: str
+    url: str
+
+
+class ResolveCompanyRequest(BaseModel):
+    name: str
+
+
+class CompanyAnalyseRequest(BaseModel):
+    url: str
+    company_name: str | None = None
+    force_refresh: bool = False
+
+
+class CompanyAnalysisOut(BaseModel):
+    company_name: str
+    url: str
+    fetched_at: datetime
+    from_cache: bool = False
+    standalone: dict[str, Any]
+    consolidated: dict[str, Any] | None = None
+    shareholding: dict[str, Any]

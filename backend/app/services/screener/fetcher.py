@@ -12,6 +12,7 @@ from __future__ import annotations
 import abc
 import logging
 from dataclasses import dataclass
+from io import StringIO
 
 import pandas as pd
 import requests
@@ -59,10 +60,10 @@ class SessionCookieFetcher(BaseScreenerFetcher):
         if len(frames) == 1:
             return frames[0]
 
-        merged = pd.concat(frames, axis=1, join="inner")
-        # Columns common to every session's table show up once per session; keep one copy.
-        merged = merged.T.drop_duplicates().T
-        return merged
+        # Columns common to every session's table (S.No., Company, ...) show up
+        # once per session; the analyzer dedups them by canonical name once it
+        # maps screener.in's raw headers, so a plain concat is enough here.
+        return pd.concat(frames, axis=1, join="inner")
 
     def _fetch_one(self, sector_url: str, session: ScreenerSession) -> pd.DataFrame:
         headers = {"Cookie": f"csrftoken={session.csrf_token}; sessionid={session.session_id}"}
@@ -76,7 +77,7 @@ class SessionCookieFetcher(BaseScreenerFetcher):
             raise ScreenerFetchError(f"Could not reach screener.in: {exc}") from exc
 
         try:
-            table = pd.read_html(response.text)[0]
+            table = pd.read_html(StringIO(response.text))[0]
         except (ValueError, IndexError) as exc:
             raise ScreenerFetchError("screener.in returned a page with no data table") from exc
 

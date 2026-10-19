@@ -46,5 +46,9 @@ def test_qoq_extreme_drop_is_dark_red():
     assert highlight["color"] == scoring.TONE_TEXT["dark"]
 
 
+def test_qoq_flat_is_neutral():
+    assert scoring.score_row({"QoQ Sales var%": 0}) == {}
+
+
 def test_unscored_columns_are_ignored():
     assert scoring.score_row({"CMP": 123.4}) == {}

@@ -1,13 +1,13 @@
 import io
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app import models, schemas
+from app import config, models, schemas
 from app.database import get_db
 from app.deps import get_current_user
 from app.exceptions import DataShapeMismatchError, ScreenerError, ScreenerSessionExpiredError, SectorNotFoundError
@@ -34,6 +34,15 @@ def fetch_sector(
         sector_label = sectors.get_sector_label(payload.sector_key)
     except SectorNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    if not payload.force_refresh:
+        cached_job = _find_fresh_cached_job(db, current_user, payload.sector_key)
+        if cached_job is not None:
+            logger.info(
+                "Serving sector '%s' for user %s from cached job %s (fetched %s)",
+                payload.sector_key, current_user.id, cached_job.id, cached_job.completed_at,
+            )
+            return _to_detail(cached_job, from_cache=True)
 
     job = models.ScreenerFetchJob(
         user_id=current_user.id,
@@ -91,6 +100,23 @@ def fetch_sector(
     return _to_detail(job)
 
 
+def _find_fresh_cached_job(
+    db: Session, current_user: models.User, sector_key: str
+) -> models.ScreenerFetchJob | None:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=config.SCREENER_CACHE_TTL_HOURS)
+    return (
+        db.query(models.ScreenerFetchJob)
+        .filter(
+            models.ScreenerFetchJob.user_id == current_user.id,
+            models.ScreenerFetchJob.sector_key == sector_key,
+            models.ScreenerFetchJob.status == "success",
+            models.ScreenerFetchJob.completed_at >= cutoff,
+        )
+        .order_by(models.ScreenerFetchJob.completed_at.desc())
+        .first()
+    )
+
+
 @router.get("/jobs", response_model=list[schemas.FetchJobSummaryOut])
 def list_jobs(
     limit: int = 20,
@@ -125,8 +151,9 @@ def export_job(
     current_user: models.User = Depends(get_current_user),
 ):
     job = _get_owned_job(db, job_id, current_user)
-    rows = sorted(job.stocks, key=lambda stock: stock.row_order)
-    workbook_bytes = excel_export.build_workbook(job.sector_label, rows)
+    detail = _to_detail(job)
+    workbook_bytes = excel_export.build_workbook(job.sector_label, detail.rows)
+    excel_export.archive_to_disk(workbook_bytes, job.sector_key, job.completed_at or job.requested_at)
     filename = f"{job.sector_key}_{job.requested_at:%Y%m%d}.xlsx"
     return StreamingResponse(
         io.BytesIO(workbook_bytes),
@@ -154,7 +181,7 @@ def _get_owned_job(db: Session, job_id: int, current_user: models.User) -> model
     return job
 
 
-def _to_detail(job: models.ScreenerFetchJob) -> schemas.FetchJobDetailOut:
+def _to_detail(job: models.ScreenerFetchJob, from_cache: bool = False) -> schemas.FetchJobDetailOut:
     rows = sorted(job.stocks, key=lambda stock: stock.row_order)
     return schemas.FetchJobDetailOut(
         id=job.id,
@@ -165,6 +192,7 @@ def _to_detail(job: models.ScreenerFetchJob) -> schemas.FetchJobDetailOut:
         row_count=job.row_count,
         requested_at=job.requested_at,
         completed_at=job.completed_at,
+        from_cache=from_cache,
         rows=[
             schemas.StockRowOut(name=stock.name, metrics=stock.metrics, highlights=stock.highlights)
             for stock in rows

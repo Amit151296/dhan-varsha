@@ -179,6 +179,15 @@
   color: #94a3b8;
 }
 
+.cache-banner {
+  background: #0c2d48;
+  color: #bae6fd;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
 .metrics-table-wrapper {
   overflow-x: auto;
   border: 1px solid #1e293b;
@@ -201,6 +210,11 @@
 
 .metrics-table th:first-child,
 .metrics-table td:first-child {
+  text-align: center;
+}
+
+.metrics-table th:nth-child(2),
+.metrics-table td:nth-child(2) {
   text-align: left;
 }
 
@@ -211,13 +225,316 @@
   top: 0;
 }
 
-.metrics-table-sticky-col {
+.metrics-table-sticky-checkbox {
   position: sticky;
   left: 0;
+  width: 2.5rem;
   background: #0f172a;
 }
 
+.metrics-table-sticky-col {
+  position: sticky;
+  left: 2.5rem;
+  background: #0f172a;
+}
+
+.metrics-table thead .metrics-table-sticky-checkbox,
 .metrics-table thead .metrics-table-sticky-col {
   background: #1e293b;
   z-index: 1;
+}
+
+/* Keep the selection boundary visible on the frozen columns too. */
+.metrics-table tr.row-selected .metrics-table-sticky-checkbox,
+.metrics-table tr.row-selected .metrics-table-sticky-col {
+  background: #0c2d48;
+}
+
+.metrics-table tr.row-selected td {
+  border-top: 2px solid #38bdf8;
+  border-bottom: 2px solid #38bdf8;
+}
+
+.selection-summary {
+  margin-bottom: 0.75rem;
+  color: #bae6fd;
+  font-size: 0.85rem;
+}
+
+.metrics-table-header-label {
+  margin-right: 0.35rem;
+}
+
+.color-filter {
+  position: relative;
+  display: inline-block;
+}
+
+.color-filter-toggle {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0;
+}
+
+.color-filter-toggle.active {
+  color: #38bdf8;
+}
+
+.color-filter-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 10;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 140px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.color-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: #f1f5f9;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.color-filter-swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.color-filter-clear {
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+}
+
+.company-search-section {
+  margin: 1.5rem 0;
+}
+
+.company-search-section h3 {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.5rem;
+}
+
+.company-search {
+  position: relative;
+  max-width: 420px;
+}
+
+.company-search-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f1f5f9;
+  font-size: 0.95rem;
+}
+
+.company-search-spinner {
+  position: absolute;
+  right: 0.75rem;
+  top: 0.65rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.company-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin-top: 0.25rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  list-style: none;
+  padding: 0.25rem;
+  max-height: 280px;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.company-search-results li button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #f1f5f9;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.company-search-results li button:hover {
+  background: #334155;
+}
+
+.company-search-empty {
+  padding: 0.5rem 0.6rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.company-name-link {
+  background: none;
+  border: none;
+  color: #38bdf8;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  text-align: left;
+}
+
+.company-name-link:disabled {
+  color: #94a3b8;
+  cursor: wait;
+}
+
+.company-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1rem 0;
+}
+
+.company-detail-header h2 {
+  margin: 0;
+}
+
+.company-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid #1e293b;
+}
+
+.company-tab {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  border-bottom: 2px solid transparent;
+}
+
+.company-tab.active {
+  color: #38bdf8;
+  border-bottom-color: #38bdf8;
+}
+
+.report-type-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.report-type-option {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.report-type-option.active {
+  background: #38bdf8;
+  border-color: #38bdf8;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.report-type-option:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.report-type-note {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.chart-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.chart-metric-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.chart-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.chart-title {
+  margin: 0 0 0.5rem;
+  color: #f1f5f9;
+  font-size: 0.95rem;
+}
+
+.chart-subtitle {
+  margin: 0.75rem 0 0.25rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.chart-unit {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.chart-tooltip {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.8rem;
+  color: #f1f5f9;
+}
+
+.chart-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.color-filter-summary {
+  margin-bottom: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
 }

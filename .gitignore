@@ -2,6 +2,7 @@ myenv/
 venv/
 __pycache__/
 *.pyc
+*.log
 backend/.env
 
 frontend/node_modules/

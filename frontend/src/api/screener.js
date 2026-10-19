@@ -5,8 +5,11 @@ export async function fetchSectors() {
   return data;
 }
 
-export async function runFetch(sectorKey) {
-  const { data } = await apiClient.post("/api/screener/fetch", { sector_key: sectorKey });
+export async function runFetch(sectorKey, { forceRefresh = false } = {}) {
+  const { data } = await apiClient.post("/api/screener/fetch", {
+    sector_key: sectorKey,
+    force_refresh: forceRefresh,
+  });
   return data;
 }
 

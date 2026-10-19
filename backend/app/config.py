@@ -19,6 +19,12 @@ SCREENER_REQUEST_TIMEOUT_SECONDS = int(os.getenv("SCREENER_REQUEST_TIMEOUT_SECON
 # how we detect an expired cookie without screener.in returning an HTTP error.
 SCREENER_MIN_EXPECTED_COLUMNS = int(os.getenv("SCREENER_MIN_EXPECTED_COLUMNS", "19"))
 
+# Sector financials don't move minute to minute, and every fetch spends one of
+# a budget-constrained number of screener.in session requests. A fetch for a
+# sector already pulled within this window is served from the database
+# instead of hitting screener.in again, unless the caller asks for force_refresh.
+SCREENER_CACHE_TTL_HOURS = float(os.getenv("SCREENER_CACHE_TTL_HOURS", "24"))
+
 
 def _load_screener_sessions() -> list[dict]:
     """Load numbered SCREENER_SESSION_<n>_CSRF / _SID pairs from the environment.
@@ -42,3 +48,9 @@ def _load_screener_sessions() -> list[dict]:
 
 
 SCREENER_SESSIONS = _load_screener_sessions()
+
+# Optional: in addition to the downloadable response, also archive every
+# export to <SCREENER_EXPORT_DIR>/<year>/<MONTH>/<sector_key>.xlsx on disk,
+# matching the original notebook's folder layout. Left unset, no local copy
+# is written - only sensible for a single-machine deployment like this one.
+SCREENER_EXPORT_DIR = os.getenv("SCREENER_EXPORT_DIR") or None

@@ -46,3 +46,21 @@ class ScreenerStockMetric(Base):
     highlights = Column(JSON, nullable=False)
 
     job = relationship("ScreenerFetchJob", back_populates="stocks")
+
+
+class CompanyAnalysisCache(Base):
+    """Cached per-company analysis (quarterly/yearly P&L + shareholding).
+
+    Shared across all users (unlike ScreenerFetchJob) since it's just public
+    financial data keyed by the company's screener.in URL - there's no reason
+    for two users looking at the same company to each spend a screener.in
+    request.
+    """
+
+    __tablename__ = "company_analysis_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_url = Column(String(255), unique=True, index=True, nullable=False)
+    company_name = Column(String(255), nullable=False)
+    payload = Column(JSON, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())

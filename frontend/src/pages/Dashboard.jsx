@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { downloadExport, fetchSectors, getJob, listJobs, runFetch } from "../api/screener";
 import MetricsTable from "../components/MetricsTable";
+import CompanySearchBox from "../components/CompanySearchBox";
 
 function errorMessage(err, fallback) {
   return err?.response?.data?.detail || fallback;
@@ -19,6 +20,10 @@ export default function Dashboard() {
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState("");
 
+  function refreshHistory() {
+    listJobs().then(setHistory).catch(() => {});
+  }
+
   useEffect(() => {
     fetchSectors()
       .then(setSectors)
@@ -26,18 +31,16 @@ export default function Dashboard() {
     refreshHistory();
   }, []);
 
-  function refreshHistory() {
-    listJobs().then(setHistory).catch(() => {});
-  }
-
-  async function handleAnalyze() {
-    if (!sectorKey) return;
+  async function handleAnalyze(sectorKeyToFetch, { forceRefresh = false } = {}) {
+    if (!sectorKeyToFetch) return;
     setIsFetching(true);
     setError("");
     try {
-      const result = await runFetch(sectorKey);
+      const result = await runFetch(sectorKeyToFetch, { forceRefresh });
       setJob(result);
-      refreshHistory();
+      if (!result.from_cache) {
+        refreshHistory();
+      }
     } catch (err) {
       setError(errorMessage(err, "Failed to fetch and analyse this sector."));
     } finally {
@@ -71,6 +74,10 @@ export default function Dashboard() {
     navigate("/login");
   }
 
+  function handleSelectCompany(company) {
+    navigate(company.url, { state: { companyName: company.name } });
+  }
+
   return (
     <div className="dashboard-page">
       <header className="dashboard-header">
@@ -79,6 +86,11 @@ export default function Dashboard() {
       </header>
       <main>
         <h2>Welcome, {user?.full_name}</h2>
+
+        <section className="company-search-section">
+          <h3>Analyse a company</h3>
+          <CompanySearchBox onSelect={handleSelectCompany} />
+        </section>
 
         <section className="analyser-controls">
           <select value={sectorKey} onChange={(event) => setSectorKey(event.target.value)}>
@@ -89,7 +101,7 @@ export default function Dashboard() {
               </option>
             ))}
           </select>
-          <button onClick={handleAnalyze} disabled={!sectorKey || isFetching}>
+          <button onClick={() => handleAnalyze(sectorKey)} disabled={!sectorKey || isFetching}>
             {isFetching ? "Analysing..." : "Fetch & Analyse"}
           </button>
           {job?.status === "success" && (
@@ -98,6 +110,24 @@ export default function Dashboard() {
         </section>
 
         {error && <p className="error-banner">{error}</p>}
+
+        {job?.status === "success" && job.from_cache && (
+          <p className="cache-banner">
+            Showing cached data from {new Date(job.completed_at).toLocaleString()} (screener.in
+            isn&apos;t re-fetched more than once a day for the same sector).{" "}
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => handleAnalyze(job.sector_key, { forceRefresh: true })}
+              disabled={isFetching}
+            >
+              Refresh now
+            </button>
+          </p>
+        )}
+
+        {job?.status === "success" && <MetricsTable job={job} />}
+        {job?.status === "failed" && <p className="error-banner">{job.error_message}</p>}
 
         {history.length > 0 && (
           <section className="analyser-history">
@@ -114,9 +144,6 @@ export default function Dashboard() {
             </ul>
           </section>
         )}
-
-        {job?.status === "success" && <MetricsTable job={job} />}
-        {job?.status === "failed" && <p className="error-banner">{job.error_message}</p>}
       </main>
     </div>
   );

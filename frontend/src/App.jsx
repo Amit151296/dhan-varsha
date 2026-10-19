@@ -3,6 +3,7 @@ import { useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import CompanyDetail from "./pages/CompanyDetail";
 import "./App.css";
 
 function ProtectedRoute({ children }) {
@@ -22,6 +23,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/company/*"
+        element={
+          <ProtectedRoute>
+            <CompanyDetail />
           </ProtectedRoute>
         }
       />
