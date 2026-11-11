@@ -7,7 +7,17 @@ export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => {
+    try {
+      if (sessionStorage.getItem("dhanvarsha_session_expired")) {
+        sessionStorage.removeItem("dhanvarsha_session_expired");
+        return "Your session expired. Please log in again.";
+      }
+    } catch {
+      // sessionStorage can be blocked; just show no message.
+    }
+    return "";
+  });
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e) {

@@ -67,6 +67,12 @@ Endpoints:
 - `GET /api/screener/jobs` - list the current user's past fetches (auth required)
 - `GET /api/screener/jobs/{job_id}` - re-read a past fetch's rows without re-fetching (auth required)
 - `GET /api/screener/jobs/{job_id}/export` - download that fetch as a colour-coded .xlsx (auth required)
+- `GET /api/portfolio` - the current user's consolidated portfolio (holdings + totals + last upload date) (auth required)
+- `POST /api/portfolio/upload` - upload a broker-app screenshot (multipart `file`, optional `broker`), extract holdings, merge them into the user's portfolio, and return it (auth required)
+- `POST /api/portfolio/holdings` - add a holding by hand (auth required)
+- `PATCH /api/portfolio/holdings/{holding_id}` - edit a holding (auth required)
+- `DELETE /api/portfolio/holdings/{holding_id}` - remove a holding (auth required)
+- `GET /api/portfolio/uploads` - list the current user's past screenshot uploads (auth required)
 
 ## 3. Run the frontend (React)
 
@@ -118,6 +124,39 @@ When a real screener.in API becomes available, swap the implementation by
 adding a new fetcher class in `backend/app/services/screener/fetcher.py` and
 pointing `SCREENER_DATA_SOURCE` at it; the cleaning, scoring, storage and API
 layers don't need to change.
+
+## Portfolio screenshot upload
+
+From `/portfolio`, a logged-in user can upload one or more screenshots of
+their holdings screen from any broker app (Zerodha Kite, Groww, Upstox, Angel
+One, etc). The backend sends each image to an OpenAI vision model to read out
+every holding (company, quantity, avg price, LTP, current value, P&L), then
+resolves each company name against screener.in (the same search used by the
+sector analyser's company links) so every row is a clickable link into the
+full company analysis.
+
+Holdings are consolidated into a single portfolio per user, not kept separate
+per upload: uploading a second screenshot of the same broker's screen updates
+matching rows and adds any new ones (handles a single broker needing several
+screenshots to show everything), and uploading a screenshot from a different
+broker just adds its holdings alongside the rest (tag the upload with the
+broker's name in the optional field so mixed-broker rows stay distinguishable
+in the table). The portfolio page also shows when the user last uploaded a
+screenshot.
+
+Since OCR off a screenshot won't always be perfect, any number in the table
+can be double-clicked and corrected, rows can be removed, and a holding can
+be added by hand - so a user can reconcile the totals shown against their
+broker app exactly. Uploads and holdings are saved per-user in Postgres;
+screenshots themselves are saved to `backend/uploads/portfolio/<user_id>/`
+(gitignored).
+
+This needs an OpenAI API key in `backend/.env`:
+
+```
+OPENAI_API_KEY=sk-...
+OPENAI_VISION_MODEL=gpt-4o-mini
+```
 
 ## Running backend tests
 

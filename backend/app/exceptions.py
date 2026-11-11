@@ -16,3 +16,7 @@ class SectorNotFoundError(ScreenerError):
 
 class DataShapeMismatchError(ScreenerError):
     """Raised when screener.in's table layout no longer matches the expected column mapping."""
+
+
+class PortfolioExtractionError(Exception):
+    """Raised when a portfolio screenshot can't be read into structured holdings."""

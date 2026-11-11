@@ -82,7 +82,10 @@ export default function Dashboard() {
     <div className="dashboard-page">
       <header className="dashboard-header">
         <h1>Dhan Varsha</h1>
-        <button onClick={handleLogout}>Log Out</button>
+        <div>
+          <button onClick={() => navigate("/portfolio")}>My Portfolio</button>{" "}
+          <button onClick={handleLogout}>Log Out</button>
+        </div>
       </header>
       <main>
         <h2>Welcome, {user?.full_name}</h2>

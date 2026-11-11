@@ -255,6 +255,67 @@
   border-bottom: 2px solid #38bdf8;
 }
 
+/* The portfolio table has no checkbox column, so its frozen Company column sits at the
+   left edge and the first two columns are both left-aligned text. */
+.portfolio-table th:first-child,
+.portfolio-table td:first-child {
+  text-align: left;
+}
+
+.portfolio-table .metrics-table-sticky-col {
+  left: 0;
+}
+
+.approx-marker {
+  color: #94a3b8;
+  margin-right: 0.15rem;
+}
+
+.analysis-section {
+  margin-top: 2rem;
+}
+
+.analysis-summary {
+  color: #bae6fd;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.analysis-table th:first-child,
+.analysis-table td:first-child {
+  text-align: left;
+  white-space: normal;
+  min-width: 11rem;
+}
+
+.analysis-table td.analysis-companies {
+  text-align: left;
+  white-space: normal;
+  max-width: 28rem;
+  color: #94a3b8;
+}
+
+.share-cell {
+  min-width: 9rem;
+}
+
+.share-bar {
+  display: inline-block;
+  height: 0.5rem;
+  border-radius: 4px;
+  background: #38bdf8;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+.pnl-positive {
+  color: #4ade80;
+}
+
+.pnl-negative {
+  color: #f87171;
+}
+
 .selection-summary {
   margin-bottom: 0.75rem;
   color: #bae6fd;

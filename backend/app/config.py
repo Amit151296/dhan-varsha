@@ -54,3 +54,13 @@ SCREENER_SESSIONS = _load_screener_sessions()
 # matching the original notebook's folder layout. Left unset, no local copy
 # is written - only sensible for a single-machine deployment like this one.
 SCREENER_EXPORT_DIR = os.getenv("SCREENER_EXPORT_DIR") or None
+
+# --- Portfolio screenshot upload ----------------------------------------------
+# Used to read holdings out of a broker app screenshot (Kite, Groww, Upstox,
+# Angel One, ...) via an OpenAI vision model.
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or None
+OPENAI_VISION_MODEL = os.getenv("OPENAI_VISION_MODEL", "gpt-4o")
+
+# Uploaded portfolio screenshots are saved here (gitignored), one subfolder
+# per user, so a past upload's image can be re-displayed without re-uploading.
+PORTFOLIO_UPLOAD_DIR = os.getenv("PORTFOLIO_UPLOAD_DIR", "uploads/portfolio")
