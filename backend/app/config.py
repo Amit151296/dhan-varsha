@@ -36,12 +36,24 @@ def _load_screener_sessions() -> list[dict]:
     sessions = []
     index = 1
     while True:
-        csrf_token = os.getenv(f"SCREENER_SESSION_{index}_CSRF")
-        session_id = os.getenv(f"SCREENER_SESSION_{index}_SID")
-        if not csrf_token or not session_id:
+        csrf_token = os.getenv(f"SCREENER_SESSION_{index}_CSRF") or ""
+        session_id = os.getenv(f"SCREENER_SESSION_{index}_SID") or ""
+        username = os.getenv(f"SCREENER_SESSION_{index}_USERNAME") or None
+        password = os.getenv(f"SCREENER_SESSION_{index}_PASSWORD") or None
+        has_cookies = bool(csrf_token and session_id)
+        can_log_in = bool(username and password)
+        if not (has_cookies or can_log_in):
             break
+        # Cookies are tried first; username/password are only used to get fresh
+        # cookies once screener.in reports the current ones as expired.
         sessions.append(
-            {"label": f"account_{index}", "csrf_token": csrf_token, "session_id": session_id}
+            {
+                "label": f"account_{index}",
+                "csrf_token": csrf_token,
+                "session_id": session_id,
+                "username": username,
+                "password": password,
+            }
         )
         index += 1
     return sessions

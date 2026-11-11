@@ -15,6 +15,7 @@ import requests
 
 from app import config
 from app.exceptions import ScreenerFetchError, ScreenerSessionExpiredError
+from app.services.screener import auth
 from app.services.screener.fetcher import ScreenerSession
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,17 @@ def fetch_company_tables(company_url: str) -> list[pd.DataFrame]:
             "SCREENER_SESSION_1_SID in backend/.env."
         )
     session = ScreenerSession(**config.SCREENER_SESSIONS[0])
+    try:
+        return _fetch_with(company_url, session)
+    except ScreenerSessionExpiredError:
+        # Only now, once screener.in has shown the cookies are dead, log in again.
+        refreshed = auth.refresh_session(session.label, session.session_id)
+        if refreshed is None:
+            raise
+        return _fetch_with(company_url, ScreenerSession(**refreshed))
+
+
+def _fetch_with(company_url: str, session: ScreenerSession) -> list[pd.DataFrame]:
     headers = {"Cookie": f"csrftoken={session.csrf_token}; sessionid={session.session_id}"}
 
     url = company_url if company_url.startswith("http") else f"{BASE_URL}{company_url}"

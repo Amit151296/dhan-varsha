@@ -96,3 +96,31 @@ def test_fetch_screener_price_returns_none_without_configured_sessions(monkeypat
     monkeypatch.setattr(prices.config, "SCREENER_SESSIONS", [])
 
     assert prices.fetch_screener_price("/company/TCS/consolidated/") is None
+
+
+def test_nse_is_tried_before_bse_for_named_tickers():
+    assert prices._symbols_to_try("RADHIKAJWE") == ["RADHIKAJWE.NS", "RADHIKAJWE.BO"]
+    assert prices._symbols_to_try("521252") == ["521252.BO"]
+
+
+def test_bse_quote_is_used_when_nse_has_none(monkeypatch):
+    calls = []
+
+    class Resp:
+        def __init__(self, price):
+            self._price = price
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"chart": {"result": [{"meta": {"regularMarketPrice": self._price}}]}}
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        return Resp(None if ".NS" in url else 42.0)
+
+    monkeypatch.setattr(prices.requests, "get", fake_get)
+
+    assert prices.fetch_price("SOMECO") == 42.0
+    assert ".NS" in calls[0] and ".BO" in calls[1]

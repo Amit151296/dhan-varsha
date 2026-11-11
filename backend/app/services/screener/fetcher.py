@@ -19,6 +19,7 @@ import requests
 
 from app import config
 from app.exceptions import ScreenerFetchError, ScreenerSessionExpiredError
+from app.services.screener import auth
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,8 @@ class ScreenerSession:
     label: str
     csrf_token: str
     session_id: str
+    username: str | None = None
+    password: str | None = None
 
 
 class BaseScreenerFetcher(abc.ABC):
@@ -66,6 +69,16 @@ class SessionCookieFetcher(BaseScreenerFetcher):
         return pd.concat(frames, axis=1, join="inner")
 
     def _fetch_one(self, sector_url: str, session: ScreenerSession) -> pd.DataFrame:
+        try:
+            return self._fetch_with(sector_url, session)
+        except ScreenerSessionExpiredError:
+            # Only now, once screener.in has shown the cookies are dead, log in again.
+            refreshed = auth.refresh_session(session.label, session.session_id)
+            if refreshed is None:
+                raise
+            return self._fetch_with(sector_url, ScreenerSession(**refreshed))
+
+    def _fetch_with(self, sector_url: str, session: ScreenerSession) -> pd.DataFrame:
         headers = {"Cookie": f"csrftoken={session.csrf_token}; sessionid={session.session_id}"}
         try:
             response = requests.get(

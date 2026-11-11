@@ -24,3 +24,13 @@ def test_unknown_screen_falls_back_to_the_models_guess_and_to_none():
     assert detect_broker(["Some", "Other", "App"], "Zerodha") == "Kite"
     assert detect_broker(["Some", "Other", "App"], "Fyers") == "Fyers"
     assert detect_broker([], None) is None
+
+
+def test_strip_series_suffix_removes_nse_series_codes():
+    from app.services.portfolio.matcher import strip_series_suffix
+
+    assert strip_series_suffix("RADHIKAJWE-BE") == "RADHIKAJWE"
+    assert strip_series_suffix("abc-eq") == "abc"
+    assert strip_series_suffix("M&M-BE") == "M&M"
+    assert strip_series_suffix("Tata Motors") == "Tata Motors"
+    assert strip_series_suffix("Coal-India") == "Coal-India"

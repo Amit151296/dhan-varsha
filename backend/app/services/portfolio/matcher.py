@@ -37,8 +37,19 @@ def _squash(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.casefold())
 
 
+_SERIES_SUFFIX = re.compile(r"^(?P<symbol>[A-Za-z0-9&]+)-(?:BE|EQ|BZ|BL|SM|ST|IL|GB|GS|N\d)$", re.IGNORECASE)
+
+
+def strip_series_suffix(name: str) -> str:
+    """NSE appends a series code to symbols in the trade-to-trade/SME segments
+    (RADHIKAJWE-BE); brokers show it, but it isn't part of the company's ticker."""
+    match = _SERIES_SUFFIX.match(name.strip())
+    return match.group("symbol") if match else name.strip()
+
+
 def _query_candidates(name: str) -> tuple[list[str], list[str]]:
     """(whole-name queries, shortened queries) for an abbreviated company name."""
+    name = strip_series_suffix(name)
     words = [w.strip(".,") for w in name.split() if w.strip(".,")]
     expanded = [_ABBREVIATIONS.get(w.casefold(), w) for w in words]
     without_the = expanded[1:] if expanded and expanded[0].casefold() == "the" else expanded
@@ -75,6 +86,15 @@ def _resolve(name: str) -> dict | None:
         if match and _contains_all_words(query, match["name"]):
             return match
     return None
+
+
+def resolve_company(name: str) -> dict | None:
+    """Best-effort screener.in match for a holding's name; None if unmatched or unreachable."""
+    try:
+        return _resolve(name)
+    except ScreenerError:
+        logger.warning("Could not resolve portfolio holding '%s' against screener.in", name, exc_info=True)
+        return None
 
 
 def match_holdings(holdings: list[dict]) -> tuple[list[dict], list[str]]:

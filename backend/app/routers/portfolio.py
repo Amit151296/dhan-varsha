@@ -14,7 +14,7 @@ from app.services.company.analyzer import canonical_company_key
 from app.services.portfolio import prices, sectors
 from app.services.portfolio.analysis import analyse_portfolio, holding_amounts
 from app.services.portfolio.extractor import extract_holdings_from_image
-from app.services.portfolio.matcher import match_holdings
+from app.services.portfolio.matcher import match_holdings, resolve_company
 from app.services.portfolio.merge import merge_holdings_into_portfolio
 
 logger = logging.getLogger(__name__)
@@ -164,6 +164,17 @@ def add_holding(
 @router.post("/sync", response_model=schemas.PortfolioOut)
 def sync_prices(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     holdings = db.query(models.PortfolioHolding).filter(models.PortfolioHolding.user_id == current_user.id).all()
+
+    # Holdings saved before their company could be matched have no ticker to price,
+    # so retry the match now rather than leaving them stuck forever.
+    for h in holdings:
+        if not h.resolved_url:
+            match = resolve_company(h.raw_name)
+            if match:
+                h.resolved_name = match["name"]
+                h.resolved_url = match["url"]
+    db.flush()
+
     latest = prices.fetch_prices_for_holdings(holdings)
 
     now = datetime.now(timezone.utc)
