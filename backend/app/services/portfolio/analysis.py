@@ -66,20 +66,25 @@ def analyse_portfolio(holdings: list, sectors: dict[str, tuple[str, str | None]]
 
     by_broker: dict[str, list] = defaultdict(list)
     by_sector: dict[str, list] = defaultdict(list)
+    by_industry: dict[str, list] = defaultdict(list)
     for h in holdings:
         by_broker[h.broker or NO_BROKER_LABEL].append(h)
-        sector = None
+        sector = industry = None
         if h.resolved_url:
-            sector = (sectors.get(canonical_company_key(h.resolved_url)) or (None, None))[0]
+            sector, industry = sectors.get(canonical_company_key(h.resolved_url)) or (None, None)
         by_sector[sector or UNCLASSIFIED_LABEL].append(h)
+        by_industry[industry or sector or UNCLASSIFIED_LABEL].append(h)
 
     sector_rows = _breakdown(by_sector, total_invested)
     # Keep "Unclassified" last regardless of how much is in it.
     sector_rows.sort(key=lambda r: r["label"] == UNCLASSIFIED_LABEL)
+    industry_rows = _breakdown(by_industry, total_invested)
+    industry_rows.sort(key=lambda r: r["label"] == UNCLASSIFIED_LABEL)
 
     return {
         "total_invested": round(total_invested, 2),
         "company_count": len({_company_identity(h) for h in holdings}),
         "by_broker": _breakdown(by_broker, total_invested),
         "by_sector": sector_rows,
+        "by_industry": industry_rows,
     }

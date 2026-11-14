@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import abc
 import logging
+import time
 from dataclasses import dataclass
 from io import StringIO
 
@@ -66,7 +67,9 @@ class SessionCookieFetcher(BaseScreenerFetcher):
         # Columns common to every session's table (S.No., Company, ...) show up
         # once per session; the analyzer dedups them by canonical name once it
         # maps screener.in's raw headers, so a plain concat is enough here.
-        return pd.concat(frames, axis=1, join="inner")
+        merged = pd.concat(frames, axis=1, join="inner")
+        merged.attrs["tickers"] = frames[0].attrs.get("tickers", [])
+        return merged
 
     def _fetch_one(self, sector_url: str, session: ScreenerSession) -> pd.DataFrame:
         try:
@@ -81,9 +84,7 @@ class SessionCookieFetcher(BaseScreenerFetcher):
     def _fetch_with(self, sector_url: str, session: ScreenerSession) -> pd.DataFrame:
         headers = {"Cookie": f"csrftoken={session.csrf_token}; sessionid={session.session_id}"}
         try:
-            response = requests.get(
-                sector_url, headers=headers, timeout=config.SCREENER_REQUEST_TIMEOUT_SECONDS
-            )
+            response = get_with_retry(sector_url, headers, config.SCREENER_REQUEST_TIMEOUT_SECONDS)
             response.raise_for_status()
         except requests.RequestException as exc:
             logger.exception("Request to screener.in failed for session '%s'", session.label)
@@ -102,10 +103,39 @@ class SessionCookieFetcher(BaseScreenerFetcher):
                 "in backend/.env."
             )
 
+        table.attrs["tickers"] = _row_tickers(response.text)
         logger.info(
             "Fetched %d columns from screener.in using session '%s'", len(table.columns), session.label
         )
         return table
+
+
+def get_with_retry(url: str, headers: dict, timeout: float, attempts: int = 3) -> requests.Response:
+    """GET that waits and retries when screener.in answers 429 (too many requests)."""
+    for attempt in range(attempts):
+        response = requests.get(url, headers=headers, timeout=timeout)
+        if response.status_code != 429 or attempt == attempts - 1:
+            return response
+        try:
+            wait = float(response.headers.get("Retry-After", ""))
+        except ValueError:
+            wait = 5.0 * (attempt + 1)
+        logger.warning("screener.in rate-limited %s; waiting %.0fs", url, wait)
+        time.sleep(min(wait, 30.0))
+    return response
+
+
+def _row_tickers(html: str) -> list[str | None]:
+    """Ticker for each row of the first table (from its /company/<TICKER>/ link), None if a row has none."""
+    try:
+        linked = pd.read_html(StringIO(html), extract_links="body")[0]
+    except (ValueError, IndexError):
+        return []
+    for column in linked.columns:
+        hrefs = [value[1] if isinstance(value, tuple) else None for value in linked[column]]
+        if any(href and href.startswith("/company/") for href in hrefs):
+            return [href.split("/")[2] if href and href.startswith("/company/") else None for href in hrefs]
+    return []
 
 
 def get_fetcher() -> BaseScreenerFetcher:

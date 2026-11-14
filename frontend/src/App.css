@@ -599,3 +599,81 @@
   color: #94a3b8;
   font-size: 0.85rem;
 }
+
+.insight-summary {
+  margin: 0.75rem 0;
+  line-height: 1.5;
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin: 0.75rem 0;
+}
+
+.insight-column {
+  border: 1px solid #2b3750;
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+}
+
+.insight-strength {
+  border-left-color: #4ade80;
+}
+
+.insight-risk {
+  border-left-color: #f87171;
+}
+
+.insight-column ul {
+  padding-left: 1.1rem;
+}
+
+.insight-column li {
+  margin-bottom: 0.75rem;
+}
+
+.insight-companies {
+  opacity: 0.8;
+  font-size: 0.9em;
+}
+
+.index-performance {
+  margin-bottom: 1.5rem;
+}
+
+.index-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.index-table th,
+.index-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #1e293b;
+  text-align: right;
+}
+
+.index-table th:first-child,
+.index-table td:first-child {
+  text-align: left;
+}
+
+.index-table thead th {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+
+.index-companies {
+  margin-top: 1.5rem;
+  scroll-margin-top: 1rem;
+}
+
+.index-table td .link-button {
+  text-align: left;
+}

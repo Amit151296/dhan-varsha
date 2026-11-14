@@ -1,4 +1,5 @@
 import io
+import re
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -11,6 +12,7 @@ from app import config, models, schemas
 from app.database import get_db
 from app.deps import get_current_user
 from app.exceptions import DataShapeMismatchError, ScreenerError, ScreenerSessionExpiredError, SectorNotFoundError
+from app.services.html_export import build_metrics_html
 from app.services.screener import analyzer, excel_export, scoring, sectors
 from app.services.screener.fetcher import get_fetcher
 
@@ -147,17 +149,30 @@ def get_job(
 @router.get("/jobs/{job_id}/export")
 def export_job(
     job_id: int,
+    format: str = "xlsx",
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    """Download a fetched table as Excel (`format=xlsx`) or a self-contained HTML page (`format=html`)."""
+    if format not in ("xlsx", "html"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'xlsx' or 'html'")
     job = _get_owned_job(db, job_id, current_user)
     detail = _to_detail(job)
-    workbook_bytes = excel_export.build_workbook(job.sector_label, detail.rows)
-    excel_export.archive_to_disk(workbook_bytes, job.sector_key, job.completed_at or job.requested_at)
-    filename = f"{job.sector_key}_{job.requested_at:%Y%m%d}.xlsx"
+    is_private = job.sector_key.startswith("__")  # portfolio tables hold one user's data: never archive them
+    slug = re.sub(r"\W+", "_", job.sector_label).strip("_") if is_private else job.sector_key
+    filename = f"{slug}_{job.requested_at:%Y%m%d}.{format}"
+
+    if format == "html":
+        content = build_metrics_html(job.sector_label, detail.rows, job.completed_at)
+        media_type = "text/html; charset=utf-8"
+    else:
+        content = excel_export.build_workbook(job.sector_label, detail.rows)
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        if not is_private:
+            excel_export.archive_to_disk(content, job.sector_key, job.completed_at or job.requested_at)
     return StreamingResponse(
-        io.BytesIO(workbook_bytes),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        io.BytesIO(content),
+        media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

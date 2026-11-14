@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  downloadPortfolioReport,
   getPortfolio,
   listPortfolioUploads,
   syncPortfolioPrices,
@@ -9,6 +10,8 @@ import {
 import PortfolioHoldingsTable from "../components/PortfolioHoldingsTable";
 import AddHoldingForm from "../components/AddHoldingForm";
 import PortfolioAnalysis from "../components/PortfolioAnalysis";
+import DownloadMenu from "../components/DownloadMenu";
+import BrokerFilter, { brokersFromHoldings, filterByBroker, totalsFor } from "../components/BrokerFilter";
 
 function errorMessage(err, fallback) {
   return err?.response?.data?.detail || fallback;
@@ -33,6 +36,7 @@ export default function Portfolio() {
   const [unsynced, setUnsynced] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [broker, setBroker] = useState("");
 
   function refreshHistory() {
     listPortfolioUploads().then(setHistory).catch(() => {});
@@ -122,11 +126,33 @@ export default function Portfolio() {
     loadPortfolio();
   }
 
+  async function handleDownloadReport(format) {
+    setError("");
+    try {
+      await downloadPortfolioReport({ broker: activeBroker, format });
+    } catch (err) {
+      setError(errorMessage(err, "Could not prepare the report right now."));
+    }
+  }
+
+  const brokers = brokersFromHoldings(portfolio?.holdings);
+  const activeBroker = brokers.includes(broker) ? broker : ""; // reset if that broker's rows are gone
+  const shown = filterByBroker(portfolio?.holdings || [], activeBroker);
+  const totals = totalsFor(shown);
+
   return (
     <div className="dashboard-page">
       <header className="dashboard-header">
         <h1>Dhan Varsha</h1>
-        <button onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
+        <div>
+          {portfolio?.holdings.length > 0 && (
+            <>
+              <DownloadMenu label="Download report" onDownload={handleDownloadReport} />{" "}
+            </>
+          )}
+          <button onClick={() => navigate("/portfolio/metrics")}>Company metrics</button>{" "}
+          <button onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
+        </div>
       </header>
       <main>
         <h2>My Portfolio</h2>
@@ -198,18 +224,24 @@ export default function Portfolio() {
           </p>
         )}
 
+        {portfolio && (
+          <BrokerFilter brokers={brokers} value={activeBroker} onChange={setBroker} />
+        )}
+
         {portfolio && portfolio.summary.holding_count > 0 && (
           <section className="selection-summary">
-            {portfolio.summary.holding_count} holding{portfolio.summary.holding_count === 1 ? "" : "s"} - Invested: Rs{" "}
-            {formatCurrency(portfolio.summary.total_invested)} - Current Value: Rs{" "}
-            {formatCurrency(portfolio.summary.total_current_value)} - P&L: Rs{" "}
-            {formatCurrency(portfolio.summary.total_pnl)}
+            {activeBroker && `${activeBroker}: `}
+            {shown.length} holding{shown.length === 1 ? "" : "s"} - Invested: Rs{" "}
+            {formatCurrency(totals.invested)} - Current Value: Rs{" "}
+            {formatCurrency(totals.current)} - P&L: Rs{" "}
+            {formatCurrency(totals.pnl)}
+            {totals.invested > 0 && ` (${totals.pnl > 0 ? "+" : ""}${((totals.pnl / totals.invested) * 100).toFixed(2)}%)`}
             {" "}(compare these totals with your broker app; add, edit, or remove rows below until they match exactly)
           </section>
         )}
 
         {isLoading && <p>Loading your portfolio...</p>}
-        {portfolio && <PortfolioHoldingsTable holdings={portfolio.holdings} onHoldingsChange={handleHoldingsChange} />}
+        {portfolio && <PortfolioHoldingsTable holdings={portfolio.holdings} onHoldingsChange={handleHoldingsChange} broker={activeBroker} />}
 
         <h3>Bought or sold something? Update it here</h3>
         <p>
@@ -221,6 +253,7 @@ export default function Portfolio() {
 
         {portfolio && (
           <PortfolioAnalysis
+            broker={activeBroker}
             refreshKey={`${portfolio.summary.holding_count}-${portfolio.summary.total_invested}-${portfolio.holdings
               .map((h) => `${h.id}:${h.broker ?? ""}`)
               .join(",")}`}

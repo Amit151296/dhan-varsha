@@ -162,6 +162,8 @@ class PortfolioAnalysisOut(BaseModel):
     company_count: int
     by_broker: list[BreakdownRowOut]
     by_sector: list[BreakdownRowOut]
+    by_industry: list[BreakdownRowOut] = []
+    by_concentration: list[BreakdownRowOut] = []
 
 
 class PortfolioUploadSummaryOut(BaseModel):
@@ -184,3 +186,71 @@ class CompanyAnalysisOut(BaseModel):
     standalone: dict[str, Any]
     consolidated: dict[str, Any] | None = None
     shareholding: dict[str, Any]
+
+
+class InsightItemOut(BaseModel):
+    title: str
+    detail: str = ""
+    companies: list[str] = []
+
+
+class PortfolioInsightsOut(BaseModel):
+    summary: str = ""
+    strengths: list[InsightItemOut] = []
+    risks: list[InsightItemOut] = []
+    watchlist: list[str] = []
+    standouts: list[str] = []
+    data_gaps: list[str] = []
+    source: str  # "ai" | "rules"
+    ai_error: str | None = None
+    cached: bool = False
+    generated_at: datetime | None = None
+
+
+class IndexRowOut(BaseModel):
+    name: str
+    slug: str | None = None
+    ltp: float | None = None
+    day_change_pct: float | None = None
+    prev_close: float | None = None
+    high_52w: float | None = None
+    up_from_low_pct: float | None = None
+    low_52w: float | None = None
+    return_1w: float | None = None
+    return_1m: float | None = None
+    return_3m: float | None = None
+    return_6m: float | None = None
+    return_1y: float | None = None
+    return_3y: float | None = None
+    return_5y: float | None = None
+
+
+class IndexPerformanceOut(BaseModel):
+    rows: list[IndexRowOut]
+    fetched_at: datetime
+    expires_at: datetime
+    cached: bool
+    stale: bool = False
+
+
+class IndexMemberOut(BaseModel):
+    name: str
+    symbol: str | None = None
+    sector: str | None = None
+    ltp: float | None = None
+    day_change_pct: float | None = None
+    market_cap_cr: float | None = None
+    pe: float | None = None
+    low_52w: float | None = None
+    high_52w: float | None = None
+    up_from_low_pct: float | None = None
+
+
+class IndexMembersOut(BaseModel):
+    index_name: str
+    slug: str
+    rows: list[IndexMemberOut]
+    fetched_at: datetime
+    expires_at: datetime
+    cached: bool
+    stale: bool = False

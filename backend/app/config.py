@@ -25,6 +25,13 @@ SCREENER_MIN_EXPECTED_COLUMNS = int(os.getenv("SCREENER_MIN_EXPECTED_COLUMNS", "
 # instead of hitting screener.in again, unless the caller asks for force_refresh.
 SCREENER_CACHE_TTL_HOURS = float(os.getenv("SCREENER_CACHE_TTL_HOURS", "24"))
 
+# Portfolio metrics are for analysis, not trading, and the saved company data is shared by
+# every user, so it is kept much longer (7 days by default) before screener.in is asked again.
+PORTFOLIO_METRICS_CACHE_TTL_HOURS = float(os.getenv("PORTFOLIO_METRICS_CACHE_TTL_HOURS", "168"))
+# "Refresh now" re-fetches only data older than this, so repeated clicks (by anyone) can't
+# keep hammering screener.in for numbers that were saved moments ago.
+PORTFOLIO_MIN_REFRESH_MINUTES = float(os.getenv("PORTFOLIO_MIN_REFRESH_MINUTES", "60"))
+
 
 def _load_screener_sessions() -> list[dict]:
     """Load numbered SCREENER_SESSION_<n>_CSRF / _SID pairs from the environment.
@@ -72,6 +79,8 @@ SCREENER_EXPORT_DIR = os.getenv("SCREENER_EXPORT_DIR") or None
 # Angel One, ...) via an OpenAI vision model.
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or None
 OPENAI_VISION_MODEL = os.getenv("OPENAI_VISION_MODEL", "gpt-4o")
+# Writes the portfolio strength/risk analysis from the metrics sheet (text only, so a small model is enough).
+OPENAI_INSIGHTS_MODEL = os.getenv("OPENAI_INSIGHTS_MODEL", "gpt-4o-mini")
 
 # Uploaded portfolio screenshots are saved here (gitignored), one subfolder
 # per user, so a past upload's image can be re-displayed without re-uploading.

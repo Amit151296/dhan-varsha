@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -136,3 +136,59 @@ class CompanyAnalysisCache(Base):
     company_name = Column(String(255), nullable=False)
     payload = Column(JSON, nullable=False)
     fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CompanyIndustryLink(Base):
+    """The screener.in industry listing page a company belongs to, shared across all users."""
+
+    __tablename__ = "company_industry_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_url = Column(String(255), unique=True, index=True, nullable=False)
+    industry_url = Column(String(255), nullable=False)
+
+
+class CompanyMetricSnapshot(Base):
+    """A company's raw screener.in metrics row, shared by every user holding that company.
+
+    Stored as screener.in sent it (raw column headers) and cleaned/scored when read, so
+    the metric set can change without re-fetching.
+    """
+
+    __tablename__ = "company_metric_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticker = Column(String(50), unique=True, index=True, nullable=False)
+    name = Column(String(255), nullable=False)
+    industry_url = Column(String(255), nullable=True)
+    raw = Column(JSON, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class PortfolioInsight(Base):
+    """An AI strength/risk analysis of one user's metrics sheet.
+
+    Keyed by a hash of the sheet it was written from, so the same data never costs a second
+    OpenAI call and a changed portfolio gets a fresh analysis.
+    """
+
+    __tablename__ = "portfolio_insights"
+    __table_args__ = (UniqueConstraint("user_id", "input_hash", name="uq_portfolio_insight_user_hash"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    input_hash = Column(String(64), nullable=False)
+    result = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class IndexPerformanceCache(Base):
+    """The day's NSE index performance table, shared by every user and valid until midnight India time."""
+
+    __tablename__ = "index_performance_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(40), unique=True, index=True, nullable=False)
+    rows = Column(JSON, nullable=False)
+    fetched_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)

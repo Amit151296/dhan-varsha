@@ -5,6 +5,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import CompanyDetail from "./pages/CompanyDetail";
 import Portfolio from "./pages/Portfolio";
+import PortfolioMetrics from "./pages/PortfolioMetrics";
 import "./App.css";
 
 function ProtectedRoute({ children }) {
@@ -32,6 +33,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Portfolio />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/portfolio/metrics"
+        element={
+          <ProtectedRoute>
+            <PortfolioMetrics />
           </ProtectedRoute>
         }
       />

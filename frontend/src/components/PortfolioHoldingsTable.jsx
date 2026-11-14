@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { filterByBroker } from "./BrokerFilter";
 import { useNavigate } from "react-router-dom";
 import { resolveCompanyByName } from "../api/company";
 import { deleteHolding, updateHolding } from "../api/portfolio";
@@ -15,6 +16,15 @@ const EDITABLE_COLUMNS = [
 function formatNumber(value) {
   if (value === null || value === undefined) return "-";
   return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
+// P&L as a % of what was invested; null when there is nothing to compare against.
+function pnlPercent(holding) {
+  const invested = holding.invested_value ?? (holding.quantity && holding.avg_price ? holding.quantity * holding.avg_price : null);
+  const current = holding.current_value ?? (holding.quantity && holding.ltp ? holding.quantity * holding.ltp : null);
+  const pnl = holding.pnl ?? (invested != null && current != null ? current - invested : null);
+  if (pnl == null || !invested) return null;
+  return (pnl / invested) * 100;
 }
 
 function EditableCell({ holding, column, onSaved }) {
@@ -88,7 +98,7 @@ function sortHoldings(holdings, sort) {
   });
 }
 
-export default function PortfolioHoldingsTable({ holdings, onHoldingsChange }) {
+export default function PortfolioHoldingsTable({ holdings, onHoldingsChange, broker = "" }) {
   const navigate = useNavigate();
   const [sort, setSort] = useState(null); // { key, direction } | null
 
@@ -106,7 +116,11 @@ export default function PortfolioHoldingsTable({ holdings, onHoldingsChange }) {
     return sort.direction === "asc" ? " ▲" : " ▼";
   }
 
-  const sortedHoldings = sortHoldings(holdings, sort);
+  const visibleHoldings = filterByBroker(holdings, broker);
+  const sortedHoldings = sortHoldings(
+    visibleHoldings.map((h) => ({ ...h, pnl_pct: pnlPercent(h) })),
+    sort
+  );
   const [resolvingName, setResolvingName] = useState(null);
   const [resolveError, setResolveError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
@@ -172,6 +186,11 @@ export default function PortfolioHoldingsTable({ holdings, onHoldingsChange }) {
                   </button>
                 </th>
               ))}
+              <th>
+                <button type="button" className="link-button" onClick={() => toggleSort("pnl_pct")} title="Sort by P&L %">
+                  P&amp;L %{sortIndicator("pnl_pct")}
+                </button>
+              </th>
               <th aria-label="Delete" />
             </tr>
           </thead>
@@ -193,6 +212,12 @@ export default function PortfolioHoldingsTable({ holdings, onHoldingsChange }) {
                 {EDITABLE_COLUMNS.map((column) => (
                   <EditableCell key={column.key} holding={holding} column={column} onSaved={handleCellSaved} />
                 ))}
+                <td
+                  className={holding.pnl_pct == null ? "" : holding.pnl_pct < 0 ? "pnl-negative" : "pnl-positive"}
+                  title="P&L as a percentage of the amount invested"
+                >
+                  {holding.pnl_pct == null ? "-" : `${holding.pnl_pct > 0 ? "+" : ""}${holding.pnl_pct.toFixed(2)}%`}
+                </td>
                 <td>
                   <button
                     type="button"

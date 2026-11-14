@@ -1,18 +1,31 @@
+import io
+import json
 import logging
 import os
+import re
 import uuid
+from types import SimpleNamespace
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app import config, models, schemas
 from app.database import get_db
 from app.deps import get_current_user
-from app.exceptions import PortfolioExtractionError
+from app.exceptions import PortfolioExtractionError, ScreenerError
+from app.routers import screener as screener_router
 from app.services.company.analyzer import canonical_company_key
+from app.services.portfolio import metrics as portfolio_metrics
 from app.services.portfolio import prices, sectors
-from app.services.portfolio.analysis import analyse_portfolio, holding_amounts
+from app.services.screener import analyzer as screener_analyzer
+from app.services.screener import scoring
+from app.services.portfolio.analysis import NO_BROKER_LABEL, analyse_portfolio, holding_amounts
+from app.services.html_export import build_analysis_html
+from app.services.portfolio.analysis_export import build_analysis_workbook
+from app.services.portfolio.concentration import concentration_breakdown
+from app.services.portfolio import insights as portfolio_insights
 from app.services.portfolio.extractor import extract_holdings_from_image
 from app.services.portfolio.matcher import match_holdings, resolve_company
 from app.services.portfolio.merge import merge_holdings_into_portfolio
@@ -22,6 +35,7 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+PORTFOLIO_METRICS_KEY = "__portfolio__"
 
 
 @router.get("", response_model=schemas.PortfolioOut)
@@ -29,11 +43,247 @@ def get_portfolio(db: Session = Depends(get_db), current_user: models.User = Dep
     return _build_portfolio_out(db, current_user.id)
 
 
+def _user_holdings(db: Session, user: models.User, broker: str | None = None) -> list:
+    """The user's holdings, optionally only those at one broker (NO_BROKER_LABEL = no broker recorded)."""
+    holdings = db.query(models.PortfolioHolding).filter(models.PortfolioHolding.user_id == user.id).all()
+    broker = (broker or "").strip()
+    if not broker:
+        return holdings
+    if broker == NO_BROKER_LABEL:
+        return [h for h in holdings if not h.broker]
+    return [h for h in holdings if (h.broker or "").casefold() == broker.casefold()]
+
+
 @router.get("/analysis", response_model=schemas.PortfolioAnalysisOut)
-def get_portfolio_analysis(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    holdings = db.query(models.PortfolioHolding).filter(models.PortfolioHolding.user_id == current_user.id).all()
+def get_portfolio_analysis(
+    broker: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    return _analysis_for(db, current_user, broker)[1]
+
+
+def _portfolio_title(user: models.User, broker: str | None = None) -> str:
+    name = (user.full_name or "").strip()
+    base = f"{name}'s Portfolio" if name else "My Portfolio"
+    return f"{base} ({broker})" if broker else base
+
+
+def _analysis_for(db: Session, user: models.User, broker: str | None) -> tuple[list, dict]:
+    holdings = _user_holdings(db, user, broker)
     company_sectors = sectors.get_sectors(db, [h.resolved_url for h in holdings if h.resolved_url])
-    return analyse_portfolio(holdings, company_sectors)
+    result = analyse_portfolio(holdings, company_sectors)
+    result["by_concentration"] = concentration_breakdown(holdings)
+    return holdings, result
+
+
+@router.post("/metrics/{job_id}/insights", response_model=schemas.PortfolioInsightsOut)
+def portfolio_insights_for_job(
+    job_id: int,
+    refresh: bool = False,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Strengths and risks of the portfolio, read off the colour-coded metrics table of this job.
+
+    Written by OpenAI from the sheet (one call per distinct sheet, then saved). If OpenAI can't be
+    reached, the rule-based findings are returned instead, with `ai_error` saying why.
+    """
+    job = screener_router._get_owned_job(db, job_id, current_user)
+    if not job.sector_key.startswith(PORTFOLIO_METRICS_KEY) or job.status != "success":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Insights are only available for a fetched portfolio table.")
+    rows = [SimpleNamespace(name=s.name, metrics=s.metrics, highlights=s.highlights) for s in sorted(job.stocks, key=lambda s: s.row_order)]
+    if not rows:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The metrics table is empty.")
+
+    digest = portfolio_insights.input_hash(rows)
+    saved = (
+        db.query(models.PortfolioInsight)
+        .filter(models.PortfolioInsight.user_id == current_user.id, models.PortfolioInsight.input_hash == digest)
+        .first()
+    )
+    if saved is not None and not refresh:
+        return schemas.PortfolioInsightsOut(**saved.result, source="ai", cached=True, generated_at=saved.created_at)
+
+    try:
+        result = portfolio_insights.generate_insights(rows)
+    except RuntimeError as exc:
+        return schemas.PortfolioInsightsOut(**portfolio_insights.rules_only_insights(rows), source="rules", ai_error=str(exc))
+
+    now = datetime.now(timezone.utc)
+    if saved is None:
+        db.add(models.PortfolioInsight(user_id=current_user.id, input_hash=digest, result=result, created_at=now))
+    else:
+        saved.result, saved.created_at = result, now
+    db.commit()
+    return schemas.PortfolioInsightsOut(**result, source="ai", generated_at=now)
+
+
+def _saved_metric_rows(db: Session, holdings: list):
+    """Metric rows for the holdings from the shared saved data only (no screener.in call).
+
+    Returns (rows, oldest data date, names of holdings that have no saved data yet).
+    """
+    tickers = portfolio_metrics.tickers_for_holdings(holdings)
+    if not tickers:
+        return [], None, []
+    raw = portfolio_metrics.fetch_portfolio_metrics(db, tickers, cache_only=True)
+    if raw.empty:
+        return [], None, sorted(h.raw_name for h in holdings)
+    as_of = raw.attrs["as_of"]
+    clean = screener_analyzer.clean_and_enrich(raw)
+    rows = []
+    for record in json.loads(clean.to_json(orient="records")):
+        name = record.pop("Name")
+        highlights = {col: SimpleNamespace(**value) for col, value in scoring.score_row(record).items()}
+        rows.append(SimpleNamespace(name=name, metrics=record, highlights=highlights))
+    shown = {row.name.casefold() for row in rows}
+    missing = sorted(
+        {h.raw_name for h in holdings if (h.resolved_name or h.raw_name).casefold() not in shown and h.raw_name.casefold() not in shown}
+    )
+    return rows, as_of, missing
+
+
+def _saved_insights(db: Session, user: models.User, broker: str | None):
+    """The strength/risk analysis already generated for this user's metrics table, or None. Never calls OpenAI."""
+    key = f"{PORTFOLIO_METRICS_KEY}:{broker.casefold()[:80]}" if broker else PORTFOLIO_METRICS_KEY
+    job = (
+        db.query(models.ScreenerFetchJob)
+        .filter(
+            models.ScreenerFetchJob.user_id == user.id,
+            models.ScreenerFetchJob.sector_key == key,
+            models.ScreenerFetchJob.status == "success",
+        )
+        .order_by(models.ScreenerFetchJob.id.desc())
+        .first()
+    )
+    if job is None or not job.stocks:
+        return None
+    rows = [SimpleNamespace(name=s.name, metrics=s.metrics, highlights=s.highlights) for s in sorted(job.stocks, key=lambda s: s.row_order)]
+    saved = (
+        db.query(models.PortfolioInsight)
+        .filter(models.PortfolioInsight.user_id == user.id, models.PortfolioInsight.input_hash == portfolio_insights.input_hash(rows))
+        .first()
+    )
+    return saved.result if saved else None
+
+
+@router.get("/report")
+def export_portfolio_report(
+    broker: str | None = None,
+    format: str = "html",
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """One file with everything on the portfolio page: holdings, analysis tables and company metrics.
+
+    Metrics come from the shared saved data, so downloading never calls screener.in.
+    """
+    if format not in ("xlsx", "html"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="format must be 'xlsx' or 'html'")
+    broker = (broker or "").strip() or None
+    holdings, analysis = _analysis_for(db, current_user, broker)
+    if not holdings:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No holdings to export.")
+    metric_rows, as_of, missing = _saved_metric_rows(db, holdings)
+    insights = _saved_insights(db, current_user, broker)
+    title = _portfolio_title(current_user, broker)
+    if format == "html":
+        data = build_analysis_html(title, holdings, analysis, broker, metric_rows, as_of, missing, insights)
+        media_type = "text/html; charset=utf-8"
+    else:
+        data = build_analysis_workbook(holdings, analysis, broker, owner=current_user.full_name, metric_rows=metric_rows, insights=insights)
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    slug = re.sub(r"\W+", "_", title).strip("_")
+    filename = f"{slug}_{datetime.now():%Y%m%d}.{format}"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _run_metrics_job(db, user, key, label, build_clean_table):
+    """Build the table, score it and save it as this user's job (replacing their previous one for `key`).
+
+    `build_clean_table` returns (table, as_of, from_cache): `as_of` is how old the data is and
+    `from_cache` says screener.in wasn't called. The job itself is cheap to rebuild because the
+    expensive part - the shared per-company snapshots - is cached across all users, and rebuilding
+    means the table always matches the holdings as they are now.
+    """
+    for old in db.query(models.ScreenerFetchJob).filter(
+        models.ScreenerFetchJob.user_id == user.id, models.ScreenerFetchJob.sector_key == key
+    ):
+        db.delete(old)
+    job = models.ScreenerFetchJob(user_id=user.id, sector_key=key, sector_label=label, status="running")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    from_cache = False
+    try:
+        clean_table, as_of, from_cache = build_clean_table()
+        records = json.loads(clean_table.to_json(orient="records"))
+        for row_order, record in enumerate(records):
+            name = record.pop("Name")
+            db.add(
+                models.ScreenerStockMetric(
+                    fetch_job_id=job.id,
+                    row_order=row_order,
+                    name=name,
+                    metrics=record,
+                    highlights=scoring.score_row(record),
+                )
+            )
+        job.status = "success"
+        job.row_count = len(records)
+        job.completed_at = as_of  # the banner says "data from ...", so this is when the numbers were fetched
+        db.commit()
+    except ScreenerError as exc:
+        screener_router._mark_failed(db, job, exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - last-resort guard so a job is never left "running"
+        logger.exception("Unexpected error while building portfolio metrics")
+        screener_router._mark_failed(db, job, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unexpected error while building portfolio metrics",
+        ) from exc
+
+    db.refresh(job)
+    return screener_router._to_detail(job, from_cache=from_cache)
+
+
+def _matched_tickers(db: Session, user: models.User, broker: str | None = None):
+    holdings = _user_holdings(db, user, broker)
+    tickers = portfolio_metrics.tickers_for_holdings(holdings)
+    if not tickers:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No holdings with a matched company yet. Add or sync holdings first."
+            if not broker
+            else f"No holdings with a matched company at '{broker}'.",
+        )
+    return holdings, tickers
+
+
+@router.post("/metrics", response_model=schemas.FetchJobDetailOut, status_code=status.HTTP_201_CREATED)
+def fetch_portfolio_metrics(
+    force_refresh: bool = False,
+    broker: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    broker = (broker or "").strip() or None
+    _, tickers = _matched_tickers(db, current_user, broker)
+    # Each broker gets its own cached job, so switching filters never shows another broker's table.
+    key = f"{PORTFOLIO_METRICS_KEY}:{broker.casefold()[:80]}" if broker else PORTFOLIO_METRICS_KEY
+
+    def build():
+        raw = portfolio_metrics.fetch_portfolio_metrics(db, tickers, force_refresh=force_refresh)
+        return screener_analyzer.clean_and_enrich(raw), raw.attrs["as_of"], not raw.attrs["fetched"]
+
+    return _run_metrics_job(db, current_user, key, _portfolio_title(current_user, broker), build)
 
 
 @router.post("/upload", response_model=schemas.PortfolioOut, status_code=status.HTTP_201_CREATED)

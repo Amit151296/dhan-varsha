@@ -23,8 +23,9 @@ export async function getJob(jobId) {
   return data;
 }
 
-export async function downloadExport(jobId, filename) {
+export async function downloadExport(jobId, filename, format = "xlsx") {
   const response = await apiClient.get(`/api/screener/jobs/${jobId}/export`, {
+    params: { format },
     responseType: "blob",
   });
   const url = window.URL.createObjectURL(response.data);

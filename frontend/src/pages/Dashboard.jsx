@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { downloadExport, fetchSectors, getJob, listJobs, runFetch } from "../api/screener";
 import MetricsTable from "../components/MetricsTable";
 import CompanySearchBox from "../components/CompanySearchBox";
+import IndexPerformance from "../components/IndexPerformance";
 
 function errorMessage(err, fallback) {
   return err?.response?.data?.detail || fallback;
@@ -19,6 +20,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState([]);
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState("");
+  const [showIndices, setShowIndices] = useState(false);
 
   function refreshHistory() {
     listJobs().then(setHistory).catch(() => {});
@@ -83,6 +85,9 @@ export default function Dashboard() {
       <header className="dashboard-header">
         <h1>Dhan Varsha</h1>
         <div>
+          <button onClick={() => setShowIndices((value) => !value)} aria-pressed={showIndices}>
+            {showIndices ? "Hide Index Performance" : "Index Performance"}
+          </button>{" "}
           <button onClick={() => navigate("/portfolio")}>My Portfolio</button>{" "}
           <button onClick={handleLogout}>Log Out</button>
         </div>
@@ -94,6 +99,9 @@ export default function Dashboard() {
           <h3>Analyse a company</h3>
           <CompanySearchBox onSelect={handleSelectCompany} />
         </section>
+
+        {/* Only mounted when asked for, so the index data is fetched only if the user wants to see it. */}
+        {showIndices && <IndexPerformance />}
 
         <section className="analyser-controls">
           <select value={sectorKey} onChange={(event) => setSectorKey(event.target.value)}>
